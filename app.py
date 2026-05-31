@@ -138,6 +138,84 @@ def preguntar_pdf(texto_pdf, pregunta):
 
     return ask_ai(prompt)
 
+# ---------- CREAR EMBEDDINGS ----------
+def crear_embedding(texto):
+
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=texto
+    )
+
+    return response.data[0].embedding
+    
+# ---------- CREAR ÍNDICE VECTORIAL ----------
+def crear_indice_faiss(chunks):
+
+    embeddings = []
+
+    for chunk in chunks:
+
+        embedding = crear_embedding(
+            chunk
+        )
+
+        embeddings.append(embedding)
+
+    embeddings_array = np.array(
+        embeddings
+    ).astype("float32")
+
+    dimension = embeddings_array.shape[1]
+
+    index = faiss.IndexFlatL2(
+        dimension
+    )
+
+    index.add(embeddings_array)
+
+    return index, chunks
+
+
+# ---------- DIVIDIR TEXTO EN CHUNKS ----------
+def dividir_texto(texto, tamaño=1000):
+
+    chunks = []
+
+    for i in range(0, len(texto), tamaño):
+
+        chunk = texto[i:i+tamaño]
+
+        chunks.append(chunk)
+
+    return chunks
+ # ---------- BUSCAR CHUNKS RELEVANTES ----------
+def buscar_chunks_relevantes(
+    index,
+    chunks,
+    pregunta
+):
+
+    pregunta_embedding = np.array(
+        [crear_embedding(pregunta)]
+    ).astype("float32")
+
+    k = 3
+
+    distancias, indices = index.search(
+        pregunta_embedding,
+        k
+    )
+
+    resultados = []
+
+    for i in indices[0]:
+
+        resultados.append(
+            chunks[i]
+        )
+
+    return "\n\n".join(resultados)
+
 # ---------- UI ----------
 
 # ---------- MEMORIA CHAT ----------
@@ -147,7 +225,7 @@ if "messages" not in st.session_state:
 if "qa_history" not in st.session_state:
     st.session_state.qa_history = []
 
-st.title("🤖 AI Office Assistant")
+st.write("🔥 AIR M2 TEST 🔥")
 st.write("Sube un PDF y obtén un resumen inteligente.")
 
 # ---------- MOSTRAR CHAT ----------
@@ -207,7 +285,7 @@ if uploaded_files:
 
             st.session_state.resumen = resumen
 
-st.session_state.messages.append(
+            st.session_state.messages.append(
                 {
                     "role": "user",
                     "content": (
@@ -217,12 +295,12 @@ st.session_state.messages.append(
                 }
             )
 
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": resumen
-            }
-        )
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": resumen
+                }
+            )
 
 if "resumen" in st.session_state:
 
@@ -241,84 +319,6 @@ if "resumen" in st.session_state:
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-    # ---------- CREAR EMBEDDINGS ----------
-    def crear_embedding(texto):
-
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=texto
-    )
-
-        return response.data[0].embedding
-    
-    # ---------- CREAR ÍNDICE VECTORIAL ----------
-def crear_indice_faiss(chunks):
-
-    embeddings = []
-
-    for chunk in chunks:
-
-        embedding = crear_embedding(
-            chunk
-        )
-
-        embeddings.append(embedding)
-
-    embeddings_array = np.array(
-        embeddings
-    ).astype("float32")
-
-    dimension = embeddings_array.shape[1]
-
-    index = faiss.IndexFlatL2(
-        dimension
-    )
-
-    index.add(embeddings_array)
-
-    return index, chunks
-
-    # ---------- DIVIDIR TEXTO EN CHUNKS ----------
-    def dividir_texto(texto, tamaño=1000):
-
-        chunks = []
-
-        for i in range(0, len(texto), tamaño):
-
-            chunk = texto[i:i+tamaño]
-
-            chunks.append(chunk)
-
-        return chunks
-    
-    # ---------- BUSCAR CHUNKS RELEVANTES ----------
-    def buscar_chunks_relevantes(
-    index,
-    chunks,
-    pregunta
-):
-
-    pregunta_embedding = np.array(
-        [crear_embedding(pregunta)]
-    ).astype("float32")
-
-    k = 3
-
-    distancias, indices = index.search(
-        pregunta_embedding,
-        k
-    )
-
-    resultados = []
-
-    for i in indices[0]:
-
-        resultados.append(
-            chunks[i]
-        )
-
-    return "\n\n".join(resultados)
-   
     # ---------- PREGUNTAS PDF ----------
     st.subheader("❓ Haz preguntas sobre el PDF")
 
