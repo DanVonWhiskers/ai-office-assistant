@@ -58,6 +58,33 @@ def extraer_texto_pdf(uploaded_file):
     return texto
 
 
+# ---------- EXTRAER TEXTO PDF CON PAGINAS ----------
+def extraer_paginas_pdf(uploaded_file):
+
+    reader = PdfReader(uploaded_file)
+
+    paginas = []
+
+    for numero, page in enumerate(
+        reader.pages,
+        start=1
+    ):
+
+        contenido = page.extract_text()
+
+        if contenido:
+
+            paginas.append(
+                {
+                    "pagina": numero,
+                    "texto": contenido,
+                    "documento": uploaded_file.name
+                }
+            )
+
+    return paginas
+
+
 # ---------- RESUMIR TEXTO LARGO ----------
 def resumir_texto_largo(texto):
 
@@ -116,22 +143,43 @@ def crear_docx(resumen):
 # ---------- PREGUNTAR SOBRE PDF ----------
 def preguntar_pdf(texto_pdf, pregunta):
 
-    chunks = dividir_texto(texto_pdf)
+    resultado = buscar_chunks_relevantes(
+        st.session_state.index,
+        st.session_state.chunks,
+        pregunta
+    )
 
-    contexto = buscar_chunks_relevantes(
-    st.session_state.index,
-    st.session_state.chunks,
-    pregunta
-)
+    contexto = resultado["contexto"]
+
+    paginas = resultado["paginas"]
+
+    historial = ""
+
+    for item in st.session_state.qa_history[-5:]:
+
+        historial += (
+            f"Usuario: {item['pregunta']}\n"
+            f"Asistente: {item['respuesta']}\n\n"
+        )
 
     prompt = f"""
-    Usa el siguiente contexto del documento para responder.
+    Usa el siguiente contexto del documento
+    y el historial reciente de conversación.
+
+    Historial:
+    {historial}
 
     Contexto:
     {contexto}
 
-    Pregunta:
+    Pregunta actual:
     {pregunta}
+
+    Si utilizas información del documento,
+    indica al final las páginas relevantes.
+
+    Páginas disponibles:
+    {paginas}
 
     Responde de forma clara y profesional.
     """
@@ -156,7 +204,7 @@ def crear_indice_faiss(chunks):
     for chunk in chunks:
 
         embedding = crear_embedding(
-            chunk
+        chunk["texto"]
         )
 
         embeddings.append(embedding)
@@ -188,6 +236,37 @@ def dividir_texto(texto, tamaño=1000):
         chunks.append(chunk)
 
     return chunks
+
+# ---------- DIVIDIR PAGINAS EN CHUNKS ----------
+def dividir_paginas_en_chunks(
+    paginas,
+    tamaño=1000
+):
+
+    chunks = []
+
+    for pagina in paginas:
+
+        texto = pagina["texto"]
+
+        for i in range(
+            0,
+            len(texto),
+            tamaño
+        ):
+
+            chunk = texto[i:i+tamaño]
+
+            chunks.append(
+                {
+                    "texto": chunk,
+                    "pagina": pagina["pagina"],
+                    "documentos": pagina["documento"]
+                }
+            )
+
+    return chunks
+
  # ---------- BUSCAR CHUNKS RELEVANTES ----------
 def buscar_chunks_relevantes(
     index,
@@ -207,14 +286,28 @@ def buscar_chunks_relevantes(
     )
 
     resultados = []
+    paginas = set()
+    documentos = set()
 
     for i in indices[0]:
 
         resultados.append(
-            chunks[i]
+            chunks[i]["texto"]
         )
 
-    return "\n\n".join(resultados)
+        paginas.add(
+            chunks[i]["pagina"]
+        )
+        
+        documentos.add(
+            chunks[i]["documentos"]
+        )
+
+    return {
+        "contexto": "\n\n".join(resultados),
+        "paginas": sorted(list(paginas)),
+        "documentos": sorted(list(documentos))
+    }
 
 # ---------- UI ----------
 
@@ -258,7 +351,17 @@ if uploaded_files:
 
             texto_completo = ""
 
+            paginas_completas = []
+
             for uploaded_file in uploaded_files:
+
+                paginas_pdf = extraer_paginas_pdf(
+                    uploaded_file
+                )
+
+                paginas_completas.extend(
+                    paginas_pdf
+                )
 
                 texto_pdf = extraer_texto_pdf(
                     uploaded_file
@@ -272,8 +375,8 @@ if uploaded_files:
 
             st.session_state.pdf_text = texto_completo
 
-            chunks = dividir_texto(
-                texto_completo
+            chunks = dividir_paginas_en_chunks(
+                paginas_completas
             )
 
             index, chunks = crear_indice_faiss(
