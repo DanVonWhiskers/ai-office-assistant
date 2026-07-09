@@ -318,16 +318,11 @@ if "messages" not in st.session_state:
 if "qa_history" not in st.session_state:
     st.session_state.qa_history = []
 
-st.write("🔥 AIR M2 TEST 🔥")
-st.write("Sube un PDF y obtén un resumen inteligente.")
+#---------- TÍTULO ----------
+st.write("📚 Knowledge Hub")
+st.write("Gestiona la información de tus documentos con IA.")
 
-# ---------- MOSTRAR CHAT ----------
-for message in st.session_state.messages:
-
-    with st.chat_message(message["role"]):
-
-        st.markdown(message["content"])
-
+# ---------- SUBIR ARCHIVOS ----------
 uploaded_files = st.file_uploader(
     "📄 Arrastra tus PDFs aquí",
     type=["pdf"],
@@ -345,7 +340,7 @@ if uploaded_files:
         f"Archivos cargados: {', '.join(nombres)}"
     )
 
-    if st.button("✨ Generar resumen"):
+    if st.button("🚀 Analizar documentos"):
 
         with st.spinner("Procesando documento..."):
 
@@ -405,11 +400,9 @@ if uploaded_files:
                 }
             )
 
+            st.rerun()
+
 if "resumen" in st.session_state:
-
-    st.subheader("🧠 Resumen generado")
-
-    st.write(st.session_state.resumen)
 
     docx_file = crear_docx(
         st.session_state.resumen
@@ -422,35 +415,89 @@ if "resumen" in st.session_state:
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-    # ---------- PREGUNTAS PDF ----------
-    st.subheader("❓ Haz preguntas sobre el PDF")
+# ---------- MOSTRAR CHAT ----------
+for message in st.session_state.messages:
 
-    pregunta = st.text_input(
-        "Escribe tu pregunta:"
+    with st.chat_message(message["role"]):
+
+        st.markdown(message["content"])
+
+# ---------- ACCIONES ----------
+
+if (
+    st.session_state.messages
+    or st.session_state.qa_history
+):
+
+    col1, col2 = st.columns([5,1])
+
+    with col2:
+
+        if st.button("🗑️ Nueva conversación"):
+
+            st.session_state.qa_history = []
+
+            st.rerun()
+
+# --------- MENSAJE BIENVENIDA ----------
+
+if "resumen" not in st.session_state:
+
+    st.info(
+
+        """
+
+📚 Bienvenido a Knowledge Hub
+
+Transforma tus documentos en una fuente de conocimiento consultable.
+
+Ejemplos:
+
+• Resume este documento
+
+• ¿Cuáles son los requisitos?
+
+• Enumera las tecnologías mencionadas
+
+• ¿Qué responsabilidades tiene el puesto?
+
+• ¿Qué riesgos identifica el documento?
+
+        """
+
     )
 
-    if pregunta:
+# ---------- HISTORIAL ----------
+for item in st.session_state.qa_history:
 
-        with st.spinner("Pensando..."):
+    with st.chat_message("user"):
+        st.markdown(item["pregunta"])
 
-            respuesta = preguntar_pdf(
-                st.session_state.pdf_text,
-                pregunta
-            )
+    with st.chat_message("assistant"):
+        st.markdown(item["respuesta"])
 
-        st.session_state.qa_history.append(
-            {
-                "pregunta": pregunta,
-                "respuesta": respuesta
-            }
+
+# ---------- CHAT ----------
+st.divider()
+
+pregunta = st.chat_input(
+    "Pregunta sobre tus documentos..."
+)
+
+if pregunta:
+
+    with st.spinner("Pensando..."):
+
+        respuesta = preguntar_pdf(
+            st.session_state.pdf_text,
+            pregunta
         )
 
-    # ---------- HISTORIAL Q&A ----------
-    for item in st.session_state.qa_history:
+    st.session_state.qa_history.append(
+        {
+            "pregunta": pregunta,
+            "respuesta": respuesta
+        }
+    )
 
-        with st.chat_message("user"):
-            st.markdown(item["pregunta"])
-
-        with st.chat_message("assistant"):
-            st.markdown(item["respuesta"])
-
+    st.rerun()
